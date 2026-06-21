@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎵 音乐播放器</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 左侧栏 -->
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="logo-icon">🎵</span>
+      <span class="logo-text">音乐播放器</span>
+    </div>
+    <nav class="nav-menu">
+      <a href="#" class="nav-item active" data-page="search">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <span>搜索</span>
+      </a>
+      <a href="#" class="nav-item" data-page="playlist">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+        <span>播放列表</span>
+      </a>
+      <a href="#" class="nav-item" data-page="favorites">
+        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span>收藏</span>
+      </a>
+      <a href="#" class="nav-item" data-page="kids">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        <span>少儿百科</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="btn-playlist-new" id="btnNewPlaylist">+ 新建播放列表</button>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="main-content">
+    <div class="page active" id="page-search">
+      <div class="search-header">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="搜索歌曲、歌手、专辑..." autocomplete="off">
+          <button id="searchBtn">🔍 搜索</button>
+        </div>
+        <div class="source-tabs">
+          <button class="source-tab active" data-source="all">全部</button>
+          <button class="source-tab" data-source="netease">网易云</button>
+          <button class="source-tab" data-source="migu">咪咕</button>
+          <button class="source-tab" data-source="kugou">酷狗</button>
+        </div>
+      </div>
+      <div class="search-results" id="searchResults">
+        <div class="empty-state">
+          <div class="empty-icon">🎶</div>
+          <p>输入歌名搜索，支持多音源聚合</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-playlist">
+      <div class="playlist-header">
+        <h2>播放列表</h2>
+        <div class="playlist-actions">
+          <select id="playlistSelect"></select>
+          <button class="btn-small" id="btnAddToPlaylist">添加到列表</button>
+        </div>
+      </div>
+      <div class="playlist-content" id="playlistContent">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <p>点击"新建播放列表"创建</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-favorites">
+      <div class="favorites-header">
+        <h2>我的收藏</h2>
+      </div>
+      <div class="favorites-content" id="favoritesContent">
+        <div class="empty-state">
+          <div class="empty-icon">❤️</div>
+          <p>搜索时点击 ♡ 收藏歌曲</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-kids">
+      <div class="kids-header">
+        <h2>🧒 少儿百科</h2>
+        <p class="kids-subtitle">探索世界的奥秘，边听边学知识</p>
+      </div>
+      <div class="kids-categories" id="kidsCategories">
+        <button class="kids-cat-btn active" data-cat="all">🌟 全部</button>
+        <button class="kids-cat-btn" data-cat="science">🔬 科学</button>
+        <button class="kids-cat-btn" data-cat="career">👨‍⚕️ 职业</button>
+        <button class="kids-cat-btn" data-cat="nature">🌿 自然</button>
+        <button class="kids-cat-btn" data-cat="story">📖 故事</button>
+        <button class="kids-cat-btn" data-cat="song">🎵 儿歌</button>
+      </div>
+      <div class="kids-search-box">
+        <input type="text" id="kidsSearchInput" placeholder="搜索少儿百科内容...">
+        <button id="kidsSearchBtn">🔍 搜索</button>
+      </div>
+      <div class="search-results" id="kidsResults">
+        <div class="kids-welcome">
+          <div class="empty-icon">🎈</div>
+          <p>点击分类或直接搜索，发现有趣的百科知识！</p>
+          <div class="kids-quick-tags">
+            <span class="kid-tag" data-q="科学的100个秘密">🔬 科学的100个秘密</span>
+            <span class="kid-tag" data-q="职业的100个秘密">👨‍⚕️ 职业的100个秘密</span>
+            <span class="kid-tag" data-q="十万个为什么">❓ 十万个为什么</span>
+            <span class="kid-tag" data-q="恐龙世界">🦕 恐龙世界</span>
+            <span class="kid-tag" data-q="太空探索">🚀 太空探索</span>
+            <span class="kid-tag" data-q="动物王国">🐘 动物王国</span>
+            <span class="kid-tag" data-q="人体奥秘">🫀 人体奥秘</span>
+            <span class="kid-tag" data-q="海洋世界">🐠 海洋世界</span>
+            <span class="kid-tag" data-q="超级飞侠">✈️ 超级飞侠</span>
+            <span class="kid-tag" data-q="宝宝巴士">🚌 宝宝巴士</span>
+            <span class="kid-tag" data-q="安全教育">🛡️ 安全教育</span>
+            <span class="kid-tag" data-q="数学游戏">🔢 数学游戏</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 歌词侧栏 -->
+  <div class="lyrics-panel" id="lyricsPanel">
+    <div class="lyrics-header">
+      <span id="lyricsTitle">歌词</span>
+      <button class="lyrics-close" id="lyricsClose">×</button>
+    </div>
+    <div class="lyrics-body" id="lyricsBody"></div>
+  </div>
+
+  <!-- 底部播放栏 -->
+  <footer class="player-bar">
+    <div class="player-info">
+      <div class="song-cover" id="songCover">🎵</div>
+      <div class="song-meta">
+        <div class="song-title" id="songTitle">未播放</div>
+        <div class="song-artist" id="songArtist">-</div>
+      </div>
+      <button class="btn-fav-player" id="btnFavPlayer">♡</button>
+    </div>
+    <div class="player-controls">
+      <button class="ctrl-btn" id="btnShuffle" title="随机">🔀</button>
+      <button class="ctrl-btn" id="btnPrev" title="上一首">⏮</button>
+      <button class="ctrl-btn play-btn" id="btnPlay" title="播放">▶</button>
+      <button class="ctrl-btn" id="btnNext" title="下一首">⏭</button>
+      <button class="ctrl-btn" id="btnLoop" title="循环">🔁</button>
+    </div>
+    <div class="player-progress">
+      <span id="currentTime">0:00</span>
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <span id="duration">0:00</span>
+    </div>
+    <div class="player-volume">
+      <span>🔊</span>
+      <input type="range" id="volumeSlider" min="0" max="100" value="80">
+    </div>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

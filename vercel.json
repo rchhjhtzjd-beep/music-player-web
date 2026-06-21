@@ -1,0 +1,8 @@
+{
+  "buildCommand": "echo 'done'",
+  "outputDirectory": ".",
+  "framework": null,
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api-handler.js" }
+  ]
+}

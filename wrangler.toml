@@ -1,0 +1,13 @@
+name = "music-player-kids"
+compatibility_date = "2024-01-01"
+pages = { dispatch = "vercel-build" }
+
+[build]
+command = "echo 'done'"
+
+[site]
+entrypoint = "."
+
+[[routes]]
+pattern = "music-player-kids.pages.dev/*"
+zone_name = "music-player-kids.pages.dev"
