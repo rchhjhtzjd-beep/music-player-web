@@ -798,6 +798,8 @@ async function loadKidsStories() {
           </div>
           <div class="song-actions">
             <button class="btn-play" data-i="${i}" title="播放">▶</button>
+            <button class="btn-dl" data-i="${i}" title="下载">💾</button>
+            <button class="btn-sub" data-i="${i}" title="双语字幕">🌐</button>
           </div>
         </div>`;
     });
@@ -809,6 +811,22 @@ async function loadKidsStories() {
         e.stopPropagation();
         const idx = parseInt(btn.dataset.i);
         playKidsStory(stories[idx]);
+      });
+    });
+
+    container.querySelectorAll('.btn-dl').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.i);
+        downloadKidsStory(stories[idx]);
+      });
+    });
+
+    container.querySelectorAll('.btn-sub').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.i);
+        showBilingualSubs(stories[idx]);
       });
     });
 
@@ -830,5 +848,68 @@ async function playKidsStory(story) {
     APP.audio.play().catch(() => APP.showToast('播放失败'));
   } catch (e) {
     APP.showToast('播放失败');
+  }
+}
+
+async function downloadKidsStory(story) {
+  APP.showToast(`正在下载: ${story.title}`);
+  try {
+    const resp = await fetch(story.url, { mode: 'cors' });
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${story.title}.mp3`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    APP.showToast('下载完成 ✓');
+  } catch (e) {
+    APP.showToast('下载失败，请重试');
+  }
+}
+
+// 双语字幕面板
+async function showBilingualSubs(story) {
+  const panel = document.getElementById('lyricsPanel');
+  const body = document.getElementById('lyricsBody');
+  document.getElementById('lyricsTitle').textContent = `🌐 ${story.title}`;
+
+  body.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>正在获取字幕...</p></div>';
+  panel.classList.add('show');
+
+  try {
+    // 获取 Storynory 原文字幕
+    const resp = await fetch(`https://www.storynory.com/transcripts/${story.title.replace(/\s+/g, '-').toLowerCase()}.txt`);
+    let text = '';
+    if (resp.ok) {
+      text = await resp.text();
+    }
+
+    if (!text) {
+      // 没有字幕，显示故事信息
+      body.innerHTML = `
+        <div style="padding:20px;">
+          <h3 style="color:#e94560;margin-bottom:10px;">${APP.esc(story.title)}</h3>
+          <p style="color:#8888aa;font-size:13px;line-height:1.8;">${APP.esc(story.description)}</p>
+          <p style="color:#8888aa;font-size:12px;margin-top:15px;">💡 提示: 播放故事时，可在 <a href="https://www.storynory.com" target="_blank" style="color:#e94560;">Storynory.com</a> 查看原文字幕</p>
+        </div>`;
+      return;
+    }
+
+    // 解析字幕文本，逐句显示
+    const lines = text.split('\n').filter(l => l.trim());
+    let html = '';
+    lines.forEach((line, i) => {
+      const trimmed = line.trim();
+      if (trimmed.length > 0) {
+        html += `<div class="lyrics-line" data-idx="${i}">${APP.esc(trimmed)}</div>`;
+      }
+    });
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = `
+      <div style="padding:20px;">
+        <p style="color:#8888aa;font-size:13px;line-height:1.8;">${APP.esc(story.description)}</p>
+        <p style="color:#8888aa;font-size:12px;margin-top:15px;">💡 播放故事时，可在 <a href="https://www.storynory.com" target="_blank" style="color:#e94560;">Storynory.com</a> 查看原文</p>
+      </div>`;
   }
 }
