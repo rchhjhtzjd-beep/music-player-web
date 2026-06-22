@@ -1,15 +1,9 @@
 // ===== 音乐播放器主程序 =====
 
 const APP = {
-  // 自动检测 API 地址：优先本地服务，其次 GitHub Pages 上的 API
-  BASE: (() => {
-    // 如果有本地服务在运行，优先用
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      return 'http://localhost:3000/api';
-    }
-    // 部署到 Vercel/Netlify 时用相对路径
-    return '/api';
-  })(),
+  BASE: location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+    ? 'http://localhost:3000/api'
+    : '/api',
   audio: new Audio(),
   playlist: [],
   currentIndex: -1,
