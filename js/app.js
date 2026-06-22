@@ -53,6 +53,10 @@ const APP = {
         if (page === 'kids') {
           initKidsPage();
         }
+        // 儿童故事页面初始化
+        if (page === 'kids-stories') {
+          loadKidsStories();
+        }
       });
     });
 
@@ -763,5 +767,68 @@ async function fetchKidsLyric(song) {
     }
   } catch (e) {
     APP.showToast('歌词加载失败');
+  }
+}
+
+// ===== 免费儿童故事功能 =====
+async function loadKidsStories() {
+  const container = document.getElementById('kidsStoriesResults');
+  container.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>加载中...</p></div>';
+
+  try {
+    const resp = await fetch(`${APP.BASE}/kids-stories`);
+    const stories = await resp.json();
+
+    if (!stories.length) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">😔</div><p>加载失败，请稍后再试</p></div>';
+      return;
+    }
+
+    let html = '<div class="song-list">';
+    stories.forEach((s, i) => {
+      const mins = Math.floor(parseInt(s.duration) / 1000 / 60);
+      const secs = Math.floor(parseInt(s.duration) / 1000 % 60);
+      html += `
+        <div class="song-item" data-index="${i}">
+          <span class="song-index">${i + 1}</span>
+          <div class="song-cover-sm" style="background:linear-gradient(135deg,#4ECDC4,#45B7D1)">📚</div>
+          <div class="song-info">
+            <div class="song-name">${APP.esc(s.title)}</div>
+            <div class="song-artist">${mins}:${secs.toString().padStart(2,'0')}</div>
+          </div>
+          <div class="song-actions">
+            <button class="btn-play" data-i="${i}" title="播放">▶</button>
+          </div>
+        </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+
+    container.querySelectorAll('.btn-play').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.i);
+        playKidsStory(stories[idx]);
+      });
+    });
+
+    container.querySelectorAll('.song-item').forEach((item, i) => {
+      item.addEventListener('click', () => playKidsStory(stories[i]));
+    });
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><p>加载失败</p></div>';
+  }
+}
+
+async function playKidsStory(story) {
+  document.getElementById('songTitle').textContent = story.title;
+  document.getElementById('songArtist').textContent = '📚 儿童故事';
+  APP.showToast(`📚 正在播放: ${story.title}`);
+
+  try {
+    APP.audio.src = story.url;
+    APP.audio.play().catch(() => APP.showToast('播放失败'));
+  } catch (e) {
+    APP.showToast('播放失败');
   }
 }

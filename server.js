@@ -229,6 +229,39 @@ app.get('/api/kids/search', async (req, res) => {
   }
 });
 
+// ============ 免费儿童故事 API (Storynory RSS) ============
+const fs = require('fs');
+const path = require('path');
+
+app.get('/api/kids-stories', async (req, res) => {
+  try {
+    // 尝试从 RSS 获取最新数据
+    const resp = await axios.get('https://www.storynory.com/feeds/stories/', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      timeout: 10000,
+    });
+    const xml = resp.data;
+    // 简单 XML 解析
+    const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+    const stories = items.map(item => {
+      const title = (item.match(/<title>(.*?)<\/title>/) || [])[1] || '';
+      const url = (item.match(/url="(.*?)"/) || [])[1] || '';
+      const duration = (item.match(/length="(.*?)"/) || [])[1] || '0';
+      const desc = ((item.match(/<description>([\s\S]*?)<\/description>/) || [])[1] || '').replace(/<[^>]+>/g, '').substring(0, 150);
+      return { title, url, duration, description: desc };
+    }).filter(s => s.url);
+    res.json(stories);
+  } catch (e) {
+    // 如果 RSS 失败，返回本地缓存
+    try {
+      const stories = JSON.parse(fs.readFileSync(path.join(__dirname, 'kids-stories.json'), 'utf-8'));
+      res.json(stories);
+    } catch (e2) {
+      res.json([]);
+    }
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Music Player API server running at http://localhost:${PORT}`);
 });
