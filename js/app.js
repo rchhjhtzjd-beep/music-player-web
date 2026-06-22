@@ -1,9 +1,7 @@
 // ===== 音乐播放器主程序 =====
 
 const APP = {
-  BASE: location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-    ? 'http://localhost:3000/api'
-    : '/api',
+  BASE: 'http://localhost:3000/api',
   audio: new Audio(),
   playlist: [],
   currentIndex: -1,
