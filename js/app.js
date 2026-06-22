@@ -600,12 +600,16 @@ function initKidsPage() {
       document.querySelectorAll('.kids-cat-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const cat = btn.dataset.cat;
-      if (cat === 'all') {
-        searchKids('少儿百科');
-      } else {
-        const keywords = { science: '科学', career: '职业', nature: '自然', story: '故事', song: '儿歌' };
-        searchKids(keywords[cat] || '少儿');
-      }
+      const keywords = {
+        all: '儿歌 故事 科普',
+        song: '儿歌 宝宝巴士 小星星 两只老虎',
+        story: '睡前故事 童话故事 寓言故事',
+        science: '十万个为什么 科学实验 恐龙',
+        cartoon: '黑猫警长 葫芦娃 舒克贝塔 大闹天宫',
+        bedtime: '睡前故事 晚安故事 摇篮曲',
+        english: 'ABC字母歌 英语儿歌 Hello Song',
+      };
+      searchKids(keywords[cat] || '儿歌');
     });
   });
 
