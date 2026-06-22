@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>🎵 音乐播放器 - 使用说明</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background: #0d0d0d; color: #eaeaea; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+  .card { background: #1a1a2e; border-radius: 16px; padding: 40px; max-width: 500px; text-align: center; }
+  h1 { color: #e94560; margin-bottom: 10px; }
+  p { color: #8888aa; line-height: 1.8; }
+  .steps { text-align: left; background: #16213e; padding: 20px; border-radius: 10px; margin: 20px 0; }
+  .steps li { margin: 8px 0; color: #eaeaea; }
+  code { background: #0f3460; padding: 2px 8px; border-radius: 4px; font-size: 13px; color: #FF6B81; }
+  .btn { display: inline-block; padding: 12px 30px; background: #e94560; color: white; border-radius: 10px; text-decoration: none; font-weight: bold; margin: 10px 5px; transition: all 0.2s; }
+  .btn:hover { background: #ff6b81; transform: translateY(-2px); }
+  .btn-green { background: #2ecc71; }
+  .btn-green:hover { background: #27ae60; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🎵 音乐播放器</h1>
+  <p>这是一个在线音乐播放器，支持搜索、播放、下载、少儿百科。</p>
+  
+  <div class="steps">
+    <strong>使用步骤：</strong>
+    <ol>
+      <li>确保已安装 <code>Node.js</code>（没有的话点下面下载）</li>
+      <li>下载项目文件到电脑</li>
+      <li>打开终端，进入项目文件夹</li>
+      <li>运行 <code>npm install</code></li>
+      <li>运行 <code>node server.js</code></li>
+      <li>浏览器打开 <code>http://localhost:3000</code></li>
+    </ol>
+  </div>
+
+  <a href="https://nodejs.org" class="btn btn-green" target="_blank">下载 Node.js</a>
+  <a href="https://github.com/rchhjhtzjd-beep/music-player-web" class="btn" target="_blank">下载项目</a>
+</div>
+</body>
+</html>
