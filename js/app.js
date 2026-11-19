@@ -1,7 +1,7 @@
 // ===== 音乐播放器主程序 =====
 
 const APP = {
-  BASE: 'http://localhost:3000/api',
+  BASE: window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api',
   audio: new Audio(),
   playlist: [],
   currentIndex: -1,
@@ -9,6 +9,16 @@ const APP = {
   isPaused: false,
   playMode: 'sequence',
   currentLyrics: [],
+  currentMedia: null,
+  playbackRequest: 0,
+  lyricsRequest: 0,
+  lyricsOwner: null,
+  activeLyricIndex: -1,
+  subtitleStory: null,
+  kidsStories: [],
+  storyQueue: [],
+  storyIndex: -1,
+  storyDurations: new Map(),
   favorites: [],
   playlists: { '默认': [] },
   currentPlaylist: '默认',
@@ -70,8 +80,10 @@ const APP = {
     // 进度条
     document.getElementById('progressBar').addEventListener('click', (e) => {
       const rect = e.currentTarget.getBoundingClientRect();
-      const pct = (e.clientX - rect.left) / rect.width;
-      if (this.audio.duration) this.audio.currentTime = pct * this.audio.duration;
+      if (rect.width <= 0) return;
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const duration = this.mediaDuration();
+      if (duration !== null) this.seekTo(pct * duration);
     });
 
     // 音量
@@ -92,26 +104,42 @@ const APP = {
   },
 
   setupAudioListeners() {
-    this.audio.addEventListener('timeupdate', () => {
-      const cur = this.audio.currentTime;
-      const dur = this.audio.duration || 0;
-      const pct = dur ? (cur / dur) * 100 : 0;
-      document.getElementById('progressFill').style.width = pct + '%';
-      document.getElementById('currentTime').textContent = this.formatTime(cur);
-      document.getElementById('duration').textContent = this.formatTime(dur);
-      this.syncLyrics(cur);
+    ['timeupdate', 'seeking', 'seeked'].forEach(event => {
+      this.audio.addEventListener(event, () => this.updatePlaybackPosition());
+    });
+    ['loadedmetadata', 'durationchange'].forEach(event => {
+      this.audio.addEventListener(event, () => {
+        const duration = this.mediaDuration();
+        if (this.currentMedia?.kind === 'story' && duration !== null) {
+          const story = this.currentMedia.story;
+          story.durationSeconds = duration;
+          this.storyDurations.set(story.url, duration);
+          document.querySelectorAll('.story-duration').forEach(label => {
+            if (label.dataset.storyUrl === story.url) label.textContent = this.formatTime(duration);
+          });
+          // Revalidate against the actual audio; never stretch cues to fit a recording.
+          if (this.subtitleStory?.url === story.url) showBilingualSubs(story, { preserveVisibility: true });
+        }
+        this.updatePlaybackPosition();
+      });
     });
 
     this.audio.addEventListener('ended', () => {
+      if (!this.audioMatchesMedia()) return;
+      this.isPlaying = false;
+      this.isPaused = true;
+      this.updatePlayBtn();
+      this.updatePlaybackPosition();
       if (this.playMode === 'single') {
-        this.audio.currentTime = 0;
-        this.audio.play();
+        this.seekTo(0);
+        this.resumePlayback();
       } else {
         this.next();
       }
     });
 
     this.audio.addEventListener('play', () => {
+      if (!this.audioMatchesMedia()) return;
       this.isPlaying = true;
       this.isPaused = false;
       this.updatePlayBtn();
@@ -121,6 +149,75 @@ const APP = {
       this.isPlaying = false;
       this.isPaused = true;
       this.updatePlayBtn();
+    });
+  },
+
+  songKey(song) {
+    return `song:${song.source}:${song.id || song.hash}`;
+  },
+
+  beginMedia(media) {
+    const request = ++this.playbackRequest;
+    this.audio.pause();
+    this.currentMedia = media;
+    this.audio.removeAttribute('src');
+    this.audio.load();
+    this.isPlaying = false;
+    this.isPaused = true;
+    this.clearLyrics();
+    document.getElementById('lyricsTitle').textContent = '字幕 / 歌词';
+    document.getElementById('lyricsBody').innerHTML = '';
+    document.getElementById('songCover').textContent = media.kind === 'story' ? '📚' : '🎵';
+    document.getElementById('btnFavPlayer').disabled = media.kind === 'story';
+    this.updatePlayBtn();
+    this.updatePlaybackPosition();
+    return request;
+  },
+
+  clearLyrics() {
+    ++this.lyricsRequest;
+    this.currentLyrics = [];
+    this.lyricsOwner = null;
+    this.activeLyricIndex = -1;
+    this.subtitleStory = null;
+  },
+
+  audioMatchesMedia() {
+    if (!this.currentMedia?.url) return false;
+    try {
+      return new URL(this.audio.currentSrc || this.audio.src, document.baseURI).href ===
+        new URL(this.currentMedia.url, document.baseURI).href;
+    } catch (e) { return false; }
+  },
+
+  mediaDuration() {
+    return this.audioMatchesMedia() ? MediaTimeline.duration(this.audio.duration) : null;
+  },
+
+  updatePlaybackPosition() {
+    const currentTime = this.audioMatchesMedia() && Number.isFinite(this.audio.currentTime)
+      ? Math.max(0, this.audio.currentTime) : 0;
+    const duration = this.mediaDuration() ?? (this.currentMedia?.kind === 'story'
+      ? MediaTimeline.duration(this.currentMedia.story.durationSeconds) : null);
+    const pct = duration === null ? 0 : Math.max(0, Math.min(100, currentTime / duration * 100));
+    document.getElementById('progressFill').style.width = `${pct}%`;
+    document.getElementById('currentTime').textContent = this.formatTime(currentTime);
+    document.getElementById('duration').textContent = duration === null ? '--:--'
+      : `${this.mediaDuration() === null && this.currentMedia?.kind === 'story' ? '约 ' : ''}${this.formatTime(duration)}`;
+    this.syncLyrics(currentTime);
+  },
+
+  seekTo(seconds) {
+    const duration = this.mediaDuration();
+    if (duration === null || !Number.isFinite(seconds)) return;
+    this.audio.currentTime = Math.max(0, Math.min(duration, seconds));
+    this.updatePlaybackPosition();
+  },
+
+  resumePlayback() {
+    const request = this.playbackRequest;
+    return this.audio.play().catch(() => {
+      if (request === this.playbackRequest) this.showToast('播放失败，请重试');
     });
   },
 
@@ -311,15 +408,21 @@ const APP = {
     const idx = this.playlist.findIndex(s => s.source === song.source && s.id === song.id);
     if (idx === -1) return;
     this.currentIndex = idx;
+    this.storyIndex = -1;
+    const request = this.beginMedia({ kind: 'song', key: this.songKey(song), song });
+    document.getElementById('songTitle').textContent = song.name;
+    document.getElementById('songArtist').textContent = song.artists || '-';
 
     // 获取播放URL
     let url = await this.getPlayUrl(song);
+    if (request !== this.playbackRequest) return;
     if (!url) {
       // 降级：尝试其他音源
       if (song.source !== 'migu') {
         song.source = 'migu';
         song.sourceLabel = '咪咕';
         url = await this.getPlayUrl(song);
+        if (request !== this.playbackRequest) return;
       }
     }
 
@@ -328,8 +431,10 @@ const APP = {
       return;
     }
 
+    this.currentMedia.key = this.songKey(song);
+    this.currentMedia.url = url;
     this.audio.src = url;
-    this.audio.play().catch(() => this.showToast('播放失败'));
+    this.resumePlayback();
 
     // 更新UI
     document.getElementById('songTitle').textContent = song.name;
@@ -366,14 +471,23 @@ const APP = {
   },
 
   togglePlay() {
-    if (this.currentIndex < 0) return;
-    if (this.isPaused) this.audio.play();
+    if (!this.currentMedia?.url) return;
+    if (this.audio.paused) this.resumePlayback();
     else this.audio.pause();
   },
 
   prev() {
+    if (this.currentMedia?.kind === 'story') {
+      if (this.audio.currentTime > 3) { this.seekTo(0); return; }
+      if (!this.storyQueue.length) return;
+      const idx = this.playMode === 'random'
+        ? Math.floor(Math.random() * this.storyQueue.length)
+        : (this.storyIndex - 1 + this.storyQueue.length) % this.storyQueue.length;
+      playKidsStory(this.storyQueue[idx], this.storyQueue);
+      return;
+    }
     if (this.playlist.length === 0) return;
-    if (this.audio.currentTime > 3) { this.audio.currentTime = 0; return; }
+    if (this.audio.currentTime > 3) { this.seekTo(0); return; }
     const idx = this.playMode === 'random'
       ? Math.floor(Math.random() * this.playlist.length)
       : (this.currentIndex - 1 + this.playlist.length) % this.playlist.length;
@@ -381,6 +495,14 @@ const APP = {
   },
 
   next() {
+    if (this.currentMedia?.kind === 'story') {
+      if (!this.storyQueue.length) return;
+      const idx = this.playMode === 'random'
+        ? Math.floor(Math.random() * this.storyQueue.length)
+        : (this.storyIndex + 1) % this.storyQueue.length;
+      playKidsStory(this.storyQueue[idx], this.storyQueue);
+      return;
+    }
     if (this.playlist.length === 0) return;
     const idx = this.playMode === 'random'
       ? Math.floor(Math.random() * this.playlist.length)
@@ -402,6 +524,12 @@ const APP = {
 
   // ---- 歌词 ----
   async fetchAndShowLyrics(song) {
+    this.clearLyrics();
+    const request = this.lyricsRequest;
+    const owner = this.songKey(song);
+    document.getElementById('lyricsTitle').textContent = song.name || '歌词';
+    document.getElementById('lyricsBody').innerHTML = '<div class="empty-state"><p>正在加载歌词...</p></div>';
+    document.getElementById('lyricsPanel').classList.add('show');
     try {
       let resp;
       if (song.source === 'netease') {
@@ -414,22 +542,25 @@ const APP = {
 
       if (resp) {
         const data = await resp.json();
+        if (request !== this.lyricsRequest) return;
         let lrc = '';
         if (song.source === 'netease') lrc = data.lrc?.lyric || '';
         else if (song.source === 'migu') lrc = data.lyric || '';
         else if (song.source === 'kugou') lrc = data.lyric || '';
 
-        if (lrc) {
-          this.currentLyrics = this.parseLRC(lrc);
-          this.showLyrics(this.currentLyrics, song.name);
-        }
+        this.showLyrics(this.parseLRC(lrc), song.name, owner);
+      } else if (request === this.lyricsRequest) {
+        this.showLyrics([], song.name, owner);
       }
     } catch (e) {
-      console.error('Lyrics error:', e);
+      if (request === this.lyricsRequest) this.showLyrics([], song.name, owner);
     }
   },
 
-  showLyrics(lines, title) {
+  showLyrics(lines, title, owner = null) {
+    this.currentLyrics = lines;
+    this.lyricsOwner = owner;
+    this.activeLyricIndex = -1;
     const panel = document.getElementById('lyricsPanel');
     const body = document.getElementById('lyricsBody');
     document.getElementById('lyricsTitle').textContent = title || '歌词';
@@ -446,18 +577,20 @@ const APP = {
     });
     body.innerHTML = html;
     panel.classList.add('show');
+    this.syncLyrics(this.audio.currentTime);
   },
 
   syncLyrics(currentTime) {
-    if (!this.currentLyrics.length) return;
-    const lines = document.querySelectorAll('.lyrics-line');
-    let activeIdx = 0;
-    for (let i = this.currentLyrics.length - 1; i >= 0; i--) {
-      if (currentTime >= this.currentLyrics[i].time) { activeIdx = i; break; }
-    }
+    const body = document.getElementById('lyricsBody');
+    const lines = body.querySelectorAll('.lyrics-line');
+    const activeIdx = this.lyricsOwner && this.lyricsOwner === this.currentMedia?.key && this.audioMatchesMedia()
+      ? MediaTimeline.activeCue(this.currentLyrics, currentTime, this.mediaDuration()) : -1;
     lines.forEach((l, i) => l.classList.toggle('active', i === activeIdx));
-    const active = document.querySelector('.lyrics-line.active');
-    if (active) active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (activeIdx !== this.activeLyricIndex && activeIdx >= 0 &&
+        document.getElementById('lyricsPanel').classList.contains('show')) {
+      lines[activeIdx]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    this.activeLyricIndex = activeIdx;
   },
 
   parseLRC(lrc) {
@@ -475,7 +608,7 @@ const APP = {
         result.push({ time: mins * 60 + secs + ms / 1000, text: line.substring(m[0].length).trim() });
       }
     }
-    return result;
+    return result.sort((a, b) => a.time - b.time);
   },
 
   // ---- 下载 ----
@@ -515,6 +648,7 @@ const APP = {
   },
 
   toggleCurrentFavorite() {
+    if (this.currentMedia?.kind === 'story') return;
     if (this.currentIndex < 0 || !this.playlist[this.currentIndex]) return;
     const song = this.playlist[this.currentIndex];
     const key = song.source + '_' + song.id;
@@ -573,15 +707,12 @@ const APP = {
   },
 
   formatTime(seconds) {
-    if (!seconds || isNaN(seconds)) return '0:00';
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    return MediaTimeline.formatTime(seconds);
   },
 
   esc(str) {
     if (!str) return '';
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   },
 
   showToast(msg) {
@@ -708,66 +839,36 @@ async function searchKids(keyword) {
 }
 
 async function playKidsSong(song) {
-  const title = song.name || '';
-  const artistNames = song.artists || '未知歌手';
-  document.getElementById('songTitle').textContent = title;
-  document.getElementById('songArtist').textContent = artistNames;
-  APP.showToast(`🎈 正在播放: ${title}`);
-
   // 如果是喜马拉雅预置专辑，用网易云搜索同名歌曲来播放
   if (song.source === 'kids_album') {
+    const request = APP.beginMedia({ kind: 'song', key: APP.songKey(song), song });
+    APP.currentIndex = -1;
+    APP.playlist = [];
+    APP.storyIndex = -1;
+    document.getElementById('songTitle').textContent = song.name || '';
+    document.getElementById('songArtist').textContent = song.artists || '未知歌手';
     try {
       const resp = await fetch(`${APP.BASE}/netease/search?keyword=${encodeURIComponent(song.name)}&limit=5`);
       const data = await resp.json();
+      if (request !== APP.playbackRequest) return;
       const songs = data.result?.songs || [];
       if (songs.length > 0) {
         const alt = songs[0];
-        const resp2 = await fetch(`${APP.BASE}/netease/url?id=${alt.id}`);
-        const data2 = await resp2.json();
-        const url = data2.data?.[0]?.url;
-        if (url) {
-          APP.audio.src = url;
-          APP.audio.play().catch(() => APP.showToast('播放失败'));
-          return;
-        }
+        const track = { ...alt, source: 'netease',
+          artists: Array.isArray(alt.artists) ? alt.artists.map(a => a.name).join(', ') : alt.artists };
+        return APP.playSong(track, [track]);
       }
     } catch (e) {
-      console.error('Kids album fallback:', e);
+      if (request !== APP.playbackRequest) return;
     }
     APP.showToast('该专辑暂无播放资源');
     return;
   }
-
-  // 网易云歌曲
-  try {
-    const resp = await fetch(`${APP.BASE}/netease/url?id=${song.id}`);
-    const data = await resp.json();
-    const url = data.data?.[0]?.url;
-    if (url) {
-      APP.audio.src = url;
-      APP.audio.play().catch(() => APP.showToast('播放失败'));
-    } else {
-      APP.showToast('该歌曲暂无播放权限');
-    }
-  } catch (e) {
-    APP.showToast('播放失败');
-  }
+  return APP.playSong(song, [song]);
 }
 
 async function fetchKidsLyric(song) {
-  try {
-    const resp = await fetch(`${APP.BASE}/netease/lyric?id=${song.id}`);
-    const data = await resp.json();
-    const lrc = data.lrc?.lyric || '';
-    if (lrc) {
-      const lines = APP.parseLRC(lrc);
-      APP.showLyrics(lines, `📝 ${song.name || ''}`);
-    } else {
-      APP.showToast('暂无歌词');
-    }
-  } catch (e) {
-    APP.showToast('歌词加载失败');
-  }
+  return APP.fetchAndShowLyrics(song);
 }
 
 // ===== 免费儿童故事功能 =====
@@ -777,7 +878,10 @@ async function loadKidsStories() {
 
   try {
     const resp = await fetch(`${APP.BASE}/kids-stories`);
-    const stories = await resp.json();
+    if (!resp.ok) throw new Error('Story request failed');
+    const data = await resp.json();
+    const stories = Array.isArray(data) ? data : [];
+    APP.kidsStories = stories;
 
     if (!stories.length) {
       container.innerHTML = '<div class="empty-state"><div class="empty-icon">😔</div><p>加载失败，请稍后再试</p></div>';
@@ -786,20 +890,23 @@ async function loadKidsStories() {
 
     let html = '<div class="song-list">';
     stories.forEach((s, i) => {
-      const mins = Math.floor(parseInt(s.duration) / 1000 / 60);
-      const secs = Math.floor(parseInt(s.duration) / 1000 % 60);
+      // The old `duration` field contained bytes. Only explicit seconds are usable.
+      const duration = APP.storyDurations.get(s.url) ?? MediaTimeline.duration(s.durationSeconds);
+      s.durationSeconds = duration;
+      const durationLabel = duration === null ? '时长待载入'
+        : `${APP.storyDurations.has(s.url) ? '' : '约 '}${APP.formatTime(duration)}`;
       html += `
         <div class="song-item" data-index="${i}">
           <span class="song-index">${i + 1}</span>
           <div class="song-cover-sm" style="background:linear-gradient(135deg,#4ECDC4,#45B7D1)">📚</div>
           <div class="song-info">
             <div class="song-name">${APP.esc(s.title)}</div>
-            <div class="song-artist">${mins}:${secs.toString().padStart(2,'0')}</div>
+            <div class="song-artist story-duration" data-story-url="${APP.esc(s.url)}">${durationLabel}</div>
           </div>
           <div class="song-actions">
             <button class="btn-play" data-i="${i}" title="播放">▶</button>
             <button class="btn-dl" data-i="${i}" title="下载">💾</button>
-            <button class="btn-sub" data-i="${i}" title="双语字幕">🌐</button>
+            <button class="btn-sub" data-i="${i}" title="字幕与原文">🌐</button>
           </div>
         </div>`;
     });
@@ -838,14 +945,23 @@ async function loadKidsStories() {
   }
 }
 
-async function playKidsStory(story) {
+async function playKidsStory(story, queue = APP.kidsStories) {
+  if (!story?.url) return;
+  const index = queue.findIndex(item => item.url === story.url);
+  APP.storyQueue = index >= 0 ? queue : [story];
+  APP.storyIndex = index >= 0 ? index : 0;
+  APP.currentIndex = -1;
+  if (APP.storyDurations.has(story.url)) story.durationSeconds = APP.storyDurations.get(story.url);
+  APP.beginMedia({ kind: 'story', key: `story:${story.url}`, story });
   document.getElementById('songTitle').textContent = story.title;
   document.getElementById('songArtist').textContent = '📚 儿童故事';
   APP.showToast(`📚 正在播放: ${story.title}`);
 
   try {
+    APP.currentMedia.url = story.url;
     APP.audio.src = story.url;
-    APP.audio.play().catch(() => APP.showToast('播放失败'));
+    APP.resumePlayback();
+    showBilingualSubs(story);
   } catch (e) {
     APP.showToast('播放失败');
   }
@@ -867,49 +983,41 @@ async function downloadKidsStory(story) {
   }
 }
 
-// 双语字幕面板
-async function showBilingualSubs(story) {
+// A transcript is not a timed subtitle track. Only supplied, validated cues sync.
+function showBilingualSubs(story, { preserveVisibility = false } = {}) {
   const panel = document.getElementById('lyricsPanel');
   const body = document.getElementById('lyricsBody');
-  document.getElementById('lyricsTitle').textContent = `🌐 ${story.title}`;
-
-  body.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>正在获取字幕...</p></div>';
-  panel.classList.add('show');
-
+  const wasOpen = panel.classList.contains('show');
+  APP.clearLyrics();
+  APP.subtitleStory = story;
+  document.getElementById('lyricsTitle').textContent = `📖 ${story.title}`;
+  panel.classList.toggle('show', !preserveVisibility || wasOpen);
+  const owner = `story:${story.url}`;
+  const actualDuration = APP.currentMedia?.key === owner ? APP.mediaDuration() : null;
+  const result = MediaTimeline.storyCues(story.subtitles, actualDuration, story.subtitleDurationSeconds);
+  let sourceUrl = 'https://www.storynory.com/';
   try {
-    // 获取 Storynory 原文字幕
-    const resp = await fetch(`https://www.storynory.com/transcripts/${story.title.replace(/\s+/g, '-').toLowerCase()}.txt`);
-    let text = '';
-    if (resp.ok) {
-      text = await resp.text();
-    }
+    const url = new URL(story.sourceUrl);
+    if (url.protocol === 'https:' || url.protocol === 'http:') sourceUrl = url.href;
+  } catch (e) { /* Cached stories may not include a source page. */ }
 
-    if (!text) {
-      // 没有字幕，显示故事信息
-      body.innerHTML = `
-        <div style="padding:20px;">
-          <h3 style="color:#e94560;margin-bottom:10px;">${APP.esc(story.title)}</h3>
-          <p style="color:#8888aa;font-size:13px;line-height:1.8;">${APP.esc(story.description)}</p>
-          <p style="color:#8888aa;font-size:12px;margin-top:15px;">💡 提示: 播放故事时，可在 <a href="https://www.storynory.com" target="_blank" style="color:#e94560;">Storynory.com</a> 查看原文字幕</p>
-        </div>`;
-      return;
-    }
-
-    // 解析字幕文本，逐句显示
-    const lines = text.split('\n').filter(l => l.trim());
-    let html = '';
-    lines.forEach((line, i) => {
-      const trimmed = line.trim();
-      if (trimmed.length > 0) {
-        html += `<div class="lyrics-line" data-idx="${i}">${APP.esc(trimmed)}</div>`;
-      }
-    });
-    body.innerHTML = html;
-  } catch (e) {
-    body.innerHTML = `
-      <div style="padding:20px;">
-        <p style="color:#8888aa;font-size:13px;line-height:1.8;">${APP.esc(story.description)}</p>
-        <p style="color:#8888aa;font-size:12px;margin-top:15px;">💡 播放故事时，可在 <a href="https://www.storynory.com" target="_blank" style="color:#e94560;">Storynory.com</a> 查看原文</p>
-      </div>`;
+  if (result.status === 'timed') {
+    APP.currentLyrics = result.cues;
+    APP.lyricsOwner = owner;
+    const label = result.cues.every(cue => cue.translation) ? '双语同步字幕' : '同步字幕';
+    body.innerHTML = `<p class="subtitle-status">${label}${APP.currentMedia?.key !== owner ? ' · 播放本故事后同步' : ''}</p>` +
+      result.cues.map((cue, i) => `<div class="lyrics-line" data-idx="${i}">${APP.esc(cue.text)}${cue.translation
+        ? `<span class="subtitle-translation">${APP.esc(cue.translation)}</span>` : ''}</div>`).join('');
+    APP.syncLyrics(APP.audio.currentTime);
+  } else {
+    const invalid = result.status === 'invalid';
+    const transcript = typeof story.transcript === 'string' ? story.transcript.trim() : '';
+    body.innerHTML = `<div class="story-notes">
+      <p class="subtitle-status">${invalid ? '字幕时间轴与音频不匹配' : '暂无同步字幕'}</p>
+      <p>${invalid ? '这份字幕的时间范围无效，已停止同步。' : '故事来源未提供带时间戳的字幕，暂不逐句高亮。'}</p>
+      ${transcript ? `<h3>故事原文（无时间轴）</h3><div class="story-transcript">${APP.esc(transcript)}</div>`
+        : `<h3>故事简介</h3><p>${APP.esc(story.description || '暂无简介')}</p>`}
+      <a href="${APP.esc(sourceUrl)}" target="_blank" rel="noopener noreferrer">查看 Storynory 故事来源</a>
+    </div>`;
   }
 }

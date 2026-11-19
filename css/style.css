@@ -498,6 +498,23 @@ body {
   border-left-color: #4ECDC4;
 }
 
+.subtitle-status {
+  color: #4ECDC4;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+
+.story-notes { color: var(--text-secondary); font-size: 15px; line-height: 1.8; }
+.story-notes h3 { color: var(--text-primary); font-size: 16px; margin: 22px 0 10px; }
+.story-notes a { color: #4ECDC4; display: inline-block; margin-top: 16px; }
+.story-transcript { white-space: pre-wrap; }
+.subtitle-translation { display: block; color: var(--text-secondary); font-size: 14px; font-weight: 400; }
+
+@media (max-width: 480px) {
+  .lyrics-panel { width: min(380px, 100vw); }
+}
+
 /* 双语字幕按钮 */
 .btn-sub {
   padding: 5px 8px;

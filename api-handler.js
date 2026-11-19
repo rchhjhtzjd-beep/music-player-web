@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { loadKidsStories } = require('./lib/kids-stories');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,6 +13,10 @@ module.exports = async (req, res) => {
 
   const { pathname, searchParams } = new URL(req.url, `http://${req.headers.host}`);
   const params = Object.fromEntries(searchParams);
+
+  if (pathname === '/api/kids-stories' || pathname === '/api/kids-stories/') {
+    return res.json(await loadKidsStories());
+  }
 
   // 少儿百科搜索
   if (pathname === '/api/kids/search') {

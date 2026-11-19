@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { loadKidsStories } = require('../../lib/kids-stories');
 
 const KIDS_ALBUMS = [
   { id: 28886553, name: "凯叔·西游记", category: "story", icon: "📚" },
@@ -44,9 +45,14 @@ exports.handler = async (event, context) => {
     return { statusCode: 200, headers, body: '' };
   }
 
-  const { pathname, queryStringParameters } = event.pathParameters || {};
-  const params = queryStringParameters || {};
-  const path = pathname || event.path;
+  const requestUrl = new URL(event.rawUrl || event.path || '/', 'http://localhost');
+  const params = event.queryStringParameters || Object.fromEntries(requestUrl.searchParams);
+  const path = (event.pathParameters?.pathname || requestUrl.pathname)
+    .replace(/^\/\.netlify\/functions\/api(?=\/|$)/, '/api');
+
+  if (path === '/api/kids-stories' || path === '/api/kids-stories/') {
+    return { statusCode: 200, headers, body: JSON.stringify(await loadKidsStories()) };
+  }
 
   // 少儿百科搜索
   if (path.includes('/api/kids/search')) {
